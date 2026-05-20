@@ -1146,6 +1146,28 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	EDITOR_SETTING_BASIC(Variant::BOOL, PROPERTY_HINT_NONE, "network/language_server/use_thread", false, String());
 	EDITOR_SETTING(Variant::INT, PROPERTY_HINT_NONE, "network/language_server/poll_limit_usec", 100000, "");
 
+	/* NAVI AI */
+
+	EDITOR_SETTING_BASIC(Variant::STRING, PROPERTY_HINT_ENUM, "ai/provider", "Ollama", "OpenAI,Anthropic,Gemini,Ollama");
+	EDITOR_SETTING_BASIC(Variant::BOOL, PROPERTY_HINT_NONE, "ai/agent/enabled_for_project", false, "");
+	EDITOR_SETTING_BASIC(Variant::BOOL, PROPERTY_HINT_NONE, "ai/context/include_current_scene", true, "");
+	EDITOR_SETTING_BASIC(Variant::BOOL, PROPERTY_HINT_NONE, "ai/context/include_current_script", true, "");
+	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_PASSWORD, "ai/providers/openai/api_key", "", "");
+	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/openai/base_url", "https://api.openai.com/v1", "");
+	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/openai/model", "", "");
+	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_PASSWORD, "ai/providers/anthropic/api_key", "", "");
+	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/anthropic/base_url", "https://api.anthropic.com", "");
+	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/anthropic/model", "", "");
+	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_PASSWORD, "ai/providers/gemini/api_key", "", "");
+	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/gemini/base_url", "https://generativelanguage.googleapis.com", "");
+	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/gemini/model", "", "");
+	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/ollama/base_url", "http://localhost:11434", "");
+	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/ollama/model", "", "");
+	EDITOR_SETTING(Variant::FLOAT, PROPERTY_HINT_RANGE, "ai/providers/ollama/temperature", 0.7, "0,2,0.01");
+	EDITOR_SETTING(Variant::FLOAT, PROPERTY_HINT_RANGE, "ai/providers/ollama/top_p", 0.9, "0,1,0.01");
+	EDITOR_SETTING(Variant::INT, PROPERTY_HINT_RANGE, "ai/providers/ollama/num_ctx", 8192, "1024,262144,1,or_greater");
+	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/ollama/keep_alive", "5m", "");
+
 	/* Debugger/profiler */
 
 	EDITOR_SETTING_BASIC(Variant::BOOL, PROPERTY_HINT_NONE, "debugger/auto_switch_to_remote_scene_tree", false, "")
