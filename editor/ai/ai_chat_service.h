@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  ai_assistant_dock.h                                                   */
+/*  ai_chat_service.h                                                     */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                              NAVI ENGINE                               */
@@ -30,47 +30,41 @@
 
 #pragma once
 
-#include "editor/docks/editor_dock.h"
+#include "core/error/error_list.h"
+#include "core/string/ustring.h"
+#include "core/variant/dictionary.h"
+#include "scene/main/node.h"
 
-class Button;
-class CheckBox;
-class AIChatService;
-class LineEdit;
-class OptionButton;
-class RichTextLabel;
-class TextEdit;
+class HTTPRequest;
 
-class AIAssistantDock : public EditorDock {
-	GDCLASS(AIAssistantDock, EditorDock);
+class AIChatService : public Node {
+	GDCLASS(AIChatService, Node);
 
-	OptionButton *provider_selector = nullptr;
-	LineEdit *model_edit = nullptr;
-	CheckBox *agent_mode = nullptr;
-	CheckBox *include_scene = nullptr;
-	CheckBox *include_script = nullptr;
-	RichTextLabel *conversation = nullptr;
-	TextEdit *prompt_edit = nullptr;
-	Button *send_button = nullptr;
-	Button *checkpoint_button = nullptr;
-	Button *refresh_ollama_button = nullptr;
-	AIChatService *chat_service = nullptr;
+	HTTPRequest *http_request = nullptr;
+	bool request_in_flight = false;
+	String active_provider;
+	String active_operation;
 
-	void _provider_selected(int p_index);
-	void _checkpoint_pressed();
-	void _refresh_ollama_models_pressed();
-	void _send_pressed();
-	void _ai_response_received(const String &p_response);
-	void _ai_request_failed(const String &p_message);
-	void _ollama_models_received(const PackedStringArray &p_models);
-	void _sync_from_settings();
-	void _save_provider_settings();
-	void _update_provider_controls();
-	String _get_selected_provider() const;
+	String _build_system_prompt(const Dictionary &p_context) const;
+	String _build_openai_payload(const String &p_model, const String &p_prompt, const Dictionary &p_context) const;
+	String _build_anthropic_payload(const String &p_model, const String &p_prompt, const Dictionary &p_context) const;
+	String _build_gemini_payload(const String &p_model, const String &p_prompt, const Dictionary &p_context) const;
+	String _build_ollama_payload(const String &p_model, const String &p_prompt, const Dictionary &p_context) const;
+	String _format_context_for_prompt(const Dictionary &p_context) const;
+	String _extract_text_from_openai_response(const Dictionary &p_response) const;
+	String _extract_text_from_anthropic_response(const Dictionary &p_response) const;
+	String _extract_text_from_gemini_response(const Dictionary &p_response) const;
+	void _handle_ollama_models_response(int p_response_code, const String &p_response_text);
+	void _request_completed(int p_result, int p_response_code, const PackedStringArray &p_headers, const PackedByteArray &p_body);
+	void _finish_with_error(const String &p_message);
 
 protected:
-	void _notification(int p_what);
 	static void _bind_methods();
 
 public:
-	AIAssistantDock();
+	Error send_chat(const String &p_provider, const String &p_model, const String &p_prompt, const Dictionary &p_context, String *r_error = nullptr);
+	Error refresh_ollama_models(String *r_error = nullptr);
+	bool is_request_in_flight() const { return request_in_flight; }
+
+	AIChatService();
 };

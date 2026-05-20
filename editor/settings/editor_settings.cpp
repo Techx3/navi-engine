@@ -1155,12 +1155,15 @@ void EditorSettings::_load_defaults(Ref<ConfigFile> p_extra_config) {
 	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_PASSWORD, "ai/providers/openai/api_key", "", "");
 	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/openai/base_url", "https://api.openai.com/v1", "");
 	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/openai/model", "", "");
+	EDITOR_SETTING(Variant::INT, PROPERTY_HINT_RANGE, "ai/providers/openai/max_output_tokens", 4096, "128,65536,1,or_greater");
 	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_PASSWORD, "ai/providers/anthropic/api_key", "", "");
 	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/anthropic/base_url", "https://api.anthropic.com", "");
 	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/anthropic/model", "", "");
+	EDITOR_SETTING(Variant::INT, PROPERTY_HINT_RANGE, "ai/providers/anthropic/max_tokens", 4096, "128,65536,1,or_greater");
 	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_PASSWORD, "ai/providers/gemini/api_key", "", "");
 	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/gemini/base_url", "https://generativelanguage.googleapis.com", "");
 	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/gemini/model", "", "");
+	EDITOR_SETTING(Variant::INT, PROPERTY_HINT_RANGE, "ai/providers/gemini/max_output_tokens", 4096, "128,65536,1,or_greater");
 	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/ollama/base_url", "http://localhost:11434", "");
 	EDITOR_SETTING(Variant::STRING, PROPERTY_HINT_NONE, "ai/providers/ollama/model", "", "");
 	EDITOR_SETTING(Variant::FLOAT, PROPERTY_HINT_RANGE, "ai/providers/ollama/temperature", 0.7, "0,2,0.01");

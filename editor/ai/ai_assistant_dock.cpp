@@ -30,6 +30,7 @@
 
 #include "ai_assistant_dock.h"
 
+#include "ai_chat_service.h"
 #include "ai_context_builder.h"
 #include "ai_project_checkpoint_manager.h"
 
@@ -58,6 +59,7 @@ void AIAssistantDock::_notification(int p_what) {
 		case NOTIFICATION_THEME_CHANGED: {
 			send_button->set_button_icon(get_editor_theme_icon(SNAME("Play")));
 			checkpoint_button->set_button_icon(get_editor_theme_icon(SNAME("VCSCommit")));
+			refresh_ollama_button->set_button_icon(get_editor_theme_icon(SNAME("Reload")));
 		} break;
 	}
 }
@@ -78,6 +80,7 @@ void AIAssistantDock::_provider_selected(int p_index) {
 	if (EditorSettings::get_singleton()->has_setting(setting_path)) {
 		model_edit->set_text(EDITOR_GET(setting_path));
 	}
+	_update_provider_controls();
 }
 
 void AIAssistantDock::_save_provider_settings() {
@@ -110,6 +113,52 @@ void AIAssistantDock::_checkpoint_pressed() {
 	}
 }
 
+void AIAssistantDock::_refresh_ollama_models_pressed() {
+	String error_message;
+	const Error err = chat_service->refresh_ollama_models(&error_message);
+	if (err != OK) {
+		_ai_request_failed(error_message);
+		return;
+	}
+
+	refresh_ollama_button->set_disabled(true);
+}
+
+void AIAssistantDock::_ollama_models_received(const PackedStringArray &p_models) {
+	refresh_ollama_button->set_disabled(false);
+
+	conversation->append_text("[b]NAVI[/b]\n");
+	if (p_models.is_empty()) {
+		conversation->append_text(TTR("Ollama is reachable, but no local models were returned.") + String("\n\n"));
+		return;
+	}
+
+	if (model_edit->get_text().strip_edges().is_empty()) {
+		model_edit->set_text(p_models[0]);
+		_save_provider_settings();
+	}
+
+	conversation->append_text(TTR("Local Ollama models:") + String("\n"));
+	for (int i = 0; i < p_models.size(); i++) {
+		conversation->append_text("- " + String(p_models[i]).xml_escape() + "\n");
+	}
+	conversation->append_text("\n");
+}
+
+void AIAssistantDock::_ai_response_received(const String &p_response) {
+	conversation->append_text("[b]NAVI[/b]\n");
+	conversation->append_text(p_response.xml_escape() + "\n\n");
+	send_button->set_disabled(false);
+	refresh_ollama_button->set_disabled(false);
+}
+
+void AIAssistantDock::_ai_request_failed(const String &p_message) {
+	conversation->append_text("[b]NAVI[/b]\n");
+	conversation->append_text("[color=red]" + p_message.xml_escape() + "[/color]\n\n");
+	send_button->set_disabled(false);
+	refresh_ollama_button->set_disabled(false);
+}
+
 void AIAssistantDock::_send_pressed() {
 	const String prompt = prompt_edit->get_text().strip_edges();
 	if (prompt.is_empty()) {
@@ -124,8 +173,15 @@ void AIAssistantDock::_send_pressed() {
 	conversation->append_text("[b]You[/b]\n");
 	conversation->append_text(prompt.xml_escape() + "\n\n");
 	conversation->append_text("[color=gray]" + context_summary.xml_escape() + "[/color]\n\n");
-	conversation->append_text("[b]NAVI[/b]\n");
-	conversation->append_text(TTR("The AI runtime is not connected yet. The editor context is now captured and ready for provider clients, checkpoints, and action execution.") + String("\n\n"));
+
+	String error_message;
+	const Error err = chat_service->send_chat(_get_selected_provider(), model_edit->get_text(), prompt, editor_context, &error_message);
+	if (err != OK) {
+		_ai_request_failed(error_message);
+		return;
+	}
+
+	send_button->set_disabled(true);
 	prompt_edit->clear();
 }
 
@@ -146,6 +202,13 @@ void AIAssistantDock::_sync_from_settings() {
 	agent_mode->set_pressed(EDITOR_GET("ai/agent/enabled_for_project"));
 	include_scene->set_pressed(EDITOR_GET("ai/context/include_current_scene"));
 	include_script->set_pressed(EDITOR_GET("ai/context/include_current_script"));
+	_update_provider_controls();
+}
+
+void AIAssistantDock::_update_provider_controls() {
+	if (refresh_ollama_button) {
+		refresh_ollama_button->set_visible(_get_selected_provider() == "Ollama");
+	}
 }
 
 AIAssistantDock::AIAssistantDock() {
@@ -159,6 +222,12 @@ AIAssistantDock::AIAssistantDock() {
 	root->set_h_size_flags(SIZE_EXPAND_FILL);
 	root->set_v_size_flags(SIZE_EXPAND_FILL);
 	add_child(root);
+
+	chat_service = memnew(AIChatService);
+	chat_service->connect("response_received", callable_mp(this, &AIAssistantDock::_ai_response_received));
+	chat_service->connect("request_failed", callable_mp(this, &AIAssistantDock::_ai_request_failed));
+	chat_service->connect("ollama_models_received", callable_mp(this, &AIAssistantDock::_ollama_models_received));
+	add_child(chat_service);
 
 	Label *title_label = memnew(Label);
 	title_label->set_text(TTR("NAVI AI"));
@@ -192,6 +261,11 @@ AIAssistantDock::AIAssistantDock() {
 	checkpoint_button->set_text(TTR("Create checkpoint"));
 	checkpoint_button->connect(SceneStringName(pressed), callable_mp(this, &AIAssistantDock::_checkpoint_pressed));
 	root->add_child(checkpoint_button);
+
+	refresh_ollama_button = memnew(Button);
+	refresh_ollama_button->set_text(TTR("Refresh Ollama models"));
+	refresh_ollama_button->connect(SceneStringName(pressed), callable_mp(this, &AIAssistantDock::_refresh_ollama_models_pressed));
+	root->add_child(refresh_ollama_button);
 
 	include_scene = memnew(CheckBox);
 	include_scene->set_text(TTR("Include current scene"));
