@@ -41,5 +41,8 @@ class AIProjectCheckpointManager {
 	static String _get_snapshot_file_path(const String &p_snapshot_id, const String &p_resource_path);
 
 public:
+	static Vector<String> list_checkpoints();
+	static String get_latest_checkpoint_id();
 	static Error create_checkpoint(const String &p_reason, const Vector<String> &p_resource_paths, String *r_snapshot_id = nullptr, String *r_message = nullptr);
+	static Error restore_checkpoint(const String &p_snapshot_id, String *r_message = nullptr);
 };

@@ -55,6 +55,7 @@ class AIAssistantDock : public EditorDock {
 	Button *checkpoint_button = nullptr;
 	Button *refresh_ollama_button = nullptr;
 	Button *apply_actions_button = nullptr;
+	Button *revert_checkpoint_button = nullptr;
 	AIChatService *chat_service = nullptr;
 	Array pending_actions;
 
@@ -62,6 +63,7 @@ class AIAssistantDock : public EditorDock {
 	void _checkpoint_pressed();
 	void _refresh_ollama_models_pressed();
 	void _apply_actions_pressed();
+	void _revert_checkpoint_pressed();
 	void _send_pressed();
 	void _ai_response_received(const String &p_response);
 	void _ai_request_failed(const String &p_message);

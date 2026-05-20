@@ -62,6 +62,7 @@ void AIAssistantDock::_notification(int p_what) {
 			checkpoint_button->set_button_icon(get_editor_theme_icon(SNAME("VCSCommit")));
 			refresh_ollama_button->set_button_icon(get_editor_theme_icon(SNAME("Reload")));
 			apply_actions_button->set_button_icon(get_editor_theme_icon(SNAME("Edit")));
+			revert_checkpoint_button->set_button_icon(get_editor_theme_icon(SNAME("History")));
 		} break;
 	}
 }
@@ -125,6 +126,27 @@ void AIAssistantDock::_refresh_ollama_models_pressed() {
 	}
 
 	refresh_ollama_button->set_disabled(true);
+}
+
+void AIAssistantDock::_revert_checkpoint_pressed() {
+	const String checkpoint_id = AIProjectCheckpointManager::get_latest_checkpoint_id();
+	conversation->append_text("[b]NAVI[/b]\n");
+	if (checkpoint_id.is_empty()) {
+		conversation->append_text(TTR("There are no NAVI checkpoints to restore.") + String("\n\n"));
+		return;
+	}
+
+	String message;
+	const Error err = AIProjectCheckpointManager::restore_checkpoint(checkpoint_id, &message);
+	if (err != OK) {
+		conversation->append_text("[color=red]" + message.xml_escape() + "[/color]\n\n");
+		return;
+	}
+
+	pending_actions.clear();
+	apply_actions_button->set_disabled(true);
+	apply_actions_button->hide();
+	conversation->append_text(message.xml_escape() + "\n\n");
 }
 
 void AIAssistantDock::_apply_actions_pressed() {
@@ -306,6 +328,11 @@ AIAssistantDock::AIAssistantDock() {
 	checkpoint_button->set_text(TTR("Create checkpoint"));
 	checkpoint_button->connect(SceneStringName(pressed), callable_mp(this, &AIAssistantDock::_checkpoint_pressed));
 	root->add_child(checkpoint_button);
+
+	revert_checkpoint_button = memnew(Button);
+	revert_checkpoint_button->set_text(TTR("Revert last NAVI checkpoint"));
+	revert_checkpoint_button->connect(SceneStringName(pressed), callable_mp(this, &AIAssistantDock::_revert_checkpoint_pressed));
+	root->add_child(revert_checkpoint_button);
 
 	apply_actions_button = memnew(Button);
 	apply_actions_button->set_text(TTR("Apply NAVI actions"));
