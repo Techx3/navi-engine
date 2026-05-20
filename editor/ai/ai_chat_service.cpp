@@ -52,6 +52,7 @@ String AIChatService::_format_context_for_prompt(const Dictionary &p_context) co
 
 String AIChatService::_build_system_prompt(const Dictionary &p_context) const {
 	String system_prompt = "You are NAVI, the integrated AI assistant inside NAVI Engine, a Godot-based editor. Answer concisely, prefer safe project-scoped changes, and use the provided editor context when relevant.";
+	system_prompt += "\n\nWhen the user asks for code or file changes, explain the change briefly and include a fenced ```navi-actions JSON block. Supported actions are write_file with path/content and replace_text with path/old_text/new_text. Paths must stay inside res://. Example: ```navi-actions\n{\"actions\":[{\"type\":\"replace_text\",\"path\":\"res://player.gd\",\"old_text\":\"old\",\"new_text\":\"new\"}]}\n```";
 
 	const String context_text = _format_context_for_prompt(p_context);
 	if (!context_text.is_empty()) {

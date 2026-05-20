@@ -30,6 +30,7 @@
 
 #include "ai_assistant_dock.h"
 
+#include "ai_action_manager.h"
 #include "ai_chat_service.h"
 #include "ai_context_builder.h"
 #include "ai_project_checkpoint_manager.h"
@@ -60,6 +61,7 @@ void AIAssistantDock::_notification(int p_what) {
 			send_button->set_button_icon(get_editor_theme_icon(SNAME("Play")));
 			checkpoint_button->set_button_icon(get_editor_theme_icon(SNAME("VCSCommit")));
 			refresh_ollama_button->set_button_icon(get_editor_theme_icon(SNAME("Reload")));
+			apply_actions_button->set_button_icon(get_editor_theme_icon(SNAME("Edit")));
 		} break;
 	}
 }
@@ -124,6 +126,38 @@ void AIAssistantDock::_refresh_ollama_models_pressed() {
 	refresh_ollama_button->set_disabled(true);
 }
 
+void AIAssistantDock::_apply_actions_pressed() {
+	if (pending_actions.is_empty()) {
+		return;
+	}
+
+	String checkpoint_hash;
+	String checkpoint_message;
+	const Error checkpoint_err = AIProjectCheckpointManager::create_checkpoint(TTR("Before applying NAVI actions"), &checkpoint_hash, &checkpoint_message);
+	if (checkpoint_err != OK) {
+		_ai_request_failed(checkpoint_message);
+		return;
+	}
+
+	String apply_message;
+	const Error apply_err = AIActionManager::apply_actions(pending_actions, &apply_message);
+	conversation->append_text("[b]NAVI[/b]\n");
+	if (apply_err != OK) {
+		conversation->append_text("[color=red]" + apply_message.xml_escape() + "[/color]\n\n");
+		return;
+	}
+
+	pending_actions.clear();
+	apply_actions_button->set_disabled(true);
+	apply_actions_button->hide();
+
+	String result_message = apply_message;
+	if (!checkpoint_hash.is_empty()) {
+		result_message += " " + vformat(TTR("Checkpoint: %s"), checkpoint_hash);
+	}
+	conversation->append_text(result_message.xml_escape() + "\n\n");
+}
+
 void AIAssistantDock::_ollama_models_received(const PackedStringArray &p_models) {
 	refresh_ollama_button->set_disabled(false);
 
@@ -148,6 +182,15 @@ void AIAssistantDock::_ollama_models_received(const PackedStringArray &p_models)
 void AIAssistantDock::_ai_response_received(const String &p_response) {
 	conversation->append_text("[b]NAVI[/b]\n");
 	conversation->append_text(p_response.xml_escape() + "\n\n");
+
+	pending_actions = AIActionManager::extract_actions_from_response(p_response);
+	if (!pending_actions.is_empty()) {
+		const String action_summary = AIActionManager::describe_actions(pending_actions);
+		conversation->append_text("[color=gray]" + TTR("Pending NAVI actions:").xml_escape() + "\n" + action_summary.xml_escape() + "[/color]\n\n");
+		apply_actions_button->set_disabled(false);
+		apply_actions_button->show();
+	}
+
 	send_button->set_disabled(false);
 	refresh_ollama_button->set_disabled(false);
 }
@@ -261,6 +304,13 @@ AIAssistantDock::AIAssistantDock() {
 	checkpoint_button->set_text(TTR("Create checkpoint"));
 	checkpoint_button->connect(SceneStringName(pressed), callable_mp(this, &AIAssistantDock::_checkpoint_pressed));
 	root->add_child(checkpoint_button);
+
+	apply_actions_button = memnew(Button);
+	apply_actions_button->set_text(TTR("Apply NAVI actions"));
+	apply_actions_button->set_disabled(true);
+	apply_actions_button->hide();
+	apply_actions_button->connect(SceneStringName(pressed), callable_mp(this, &AIAssistantDock::_apply_actions_pressed));
+	root->add_child(apply_actions_button);
 
 	refresh_ollama_button = memnew(Button);
 	refresh_ollama_button->set_text(TTR("Refresh Ollama models"));

@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  ai_assistant_dock.h                                                   */
+/*  ai_action_manager.h                                                   */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                              NAVI ENGINE                               */
@@ -30,51 +30,17 @@
 
 #pragma once
 
-#include "editor/docks/editor_dock.h"
+#include "core/error/error_list.h"
+#include "core/string/ustring.h"
 #include "core/variant/array.h"
 
-class Button;
-class CheckBox;
-class AIChatService;
-class LineEdit;
-class OptionButton;
-class RichTextLabel;
-class TextEdit;
-
-class AIAssistantDock : public EditorDock {
-	GDCLASS(AIAssistantDock, EditorDock);
-
-	OptionButton *provider_selector = nullptr;
-	LineEdit *model_edit = nullptr;
-	CheckBox *agent_mode = nullptr;
-	CheckBox *include_scene = nullptr;
-	CheckBox *include_script = nullptr;
-	RichTextLabel *conversation = nullptr;
-	TextEdit *prompt_edit = nullptr;
-	Button *send_button = nullptr;
-	Button *checkpoint_button = nullptr;
-	Button *refresh_ollama_button = nullptr;
-	Button *apply_actions_button = nullptr;
-	AIChatService *chat_service = nullptr;
-	Array pending_actions;
-
-	void _provider_selected(int p_index);
-	void _checkpoint_pressed();
-	void _refresh_ollama_models_pressed();
-	void _apply_actions_pressed();
-	void _send_pressed();
-	void _ai_response_received(const String &p_response);
-	void _ai_request_failed(const String &p_message);
-	void _ollama_models_received(const PackedStringArray &p_models);
-	void _sync_from_settings();
-	void _save_provider_settings();
-	void _update_provider_controls();
-	String _get_selected_provider() const;
-
-protected:
-	void _notification(int p_what);
-	static void _bind_methods();
+class AIActionManager {
+	static bool _is_safe_resource_path(const String &p_path, String *r_error = nullptr);
+	static Error _write_file(const String &p_path, const String &p_content, String *r_error = nullptr);
+	static Error _replace_text(const String &p_path, const String &p_old_text, const String &p_new_text, String *r_error = nullptr);
 
 public:
-	AIAssistantDock();
+	static Array extract_actions_from_response(const String &p_response);
+	static String describe_actions(const Array &p_actions);
+	static Error apply_actions(const Array &p_actions, String *r_message = nullptr);
 };
