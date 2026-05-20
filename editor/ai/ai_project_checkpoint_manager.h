@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  ai_assistant_dock.h                                                   */
+/*  ai_project_checkpoint_manager.h                                       */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                              NAVI ENGINE                               */
@@ -30,39 +30,18 @@
 
 #pragma once
 
-#include "editor/docks/editor_dock.h"
+#include "core/error/error_list.h"
+#include "core/string/ustring.h"
+#include "core/templates/list.h"
 
-class Button;
-class CheckBox;
-class LineEdit;
-class OptionButton;
-class RichTextLabel;
-class TextEdit;
-
-class AIAssistantDock : public EditorDock {
-	GDCLASS(AIAssistantDock, EditorDock);
-
-	OptionButton *provider_selector = nullptr;
-	LineEdit *model_edit = nullptr;
-	CheckBox *agent_mode = nullptr;
-	CheckBox *include_scene = nullptr;
-	CheckBox *include_script = nullptr;
-	RichTextLabel *conversation = nullptr;
-	TextEdit *prompt_edit = nullptr;
-	Button *send_button = nullptr;
-	Button *checkpoint_button = nullptr;
-
-	void _provider_selected(int p_index);
-	void _checkpoint_pressed();
-	void _send_pressed();
-	void _sync_from_settings();
-	void _save_provider_settings();
-	String _get_selected_provider() const;
-
-protected:
-	void _notification(int p_what);
-	static void _bind_methods();
+class AIProjectCheckpointManager {
+	static String _get_project_path();
+	static Error _run_git(const List<String> &p_arguments, String *r_output = nullptr, int *r_exitcode = nullptr);
+	static Error _ensure_git_identity();
+	static Error _ensure_gitignore();
 
 public:
-	AIAssistantDock();
+	static bool is_project_repository_available();
+	static Error ensure_project_repository(String *r_message = nullptr);
+	static Error create_checkpoint(const String &p_reason, String *r_commit_hash = nullptr, String *r_message = nullptr);
 };

@@ -31,6 +31,7 @@
 #include "ai_assistant_dock.h"
 
 #include "ai_context_builder.h"
+#include "ai_project_checkpoint_manager.h"
 
 #include "core/object/callable_mp.h"
 #include "editor/settings/editor_settings.h"
@@ -56,6 +57,7 @@ void AIAssistantDock::_notification(int p_what) {
 
 		case NOTIFICATION_THEME_CHANGED: {
 			send_button->set_button_icon(get_editor_theme_icon(SNAME("Play")));
+			checkpoint_button->set_button_icon(get_editor_theme_icon(SNAME("VCSCommit")));
 		} break;
 	}
 }
@@ -89,6 +91,23 @@ void AIAssistantDock::_save_provider_settings() {
 	EditorSettings::get_singleton()->set_setting("ai/context/include_current_scene", include_scene->is_pressed());
 	EditorSettings::get_singleton()->set_setting("ai/context/include_current_script", include_script->is_pressed());
 	EditorSettings::get_singleton()->save();
+}
+
+void AIAssistantDock::_checkpoint_pressed() {
+	String commit_hash;
+	String message;
+	const Error err = AIProjectCheckpointManager::create_checkpoint(TTR("Manual AI checkpoint"), &commit_hash, &message);
+
+	conversation->append_text("[b]NAVI[/b]\n");
+	if (err == OK) {
+		if (!commit_hash.is_empty()) {
+			conversation->append_text(vformat(TTR("Checkpoint ready: %s"), commit_hash).xml_escape() + "\n\n");
+		} else {
+			conversation->append_text(message.xml_escape() + "\n\n");
+		}
+	} else {
+		conversation->append_text("[color=red]" + message.xml_escape() + "[/color]\n\n");
+	}
 }
 
 void AIAssistantDock::_send_pressed() {
@@ -168,6 +187,11 @@ AIAssistantDock::AIAssistantDock() {
 	agent_mode = memnew(CheckBox);
 	agent_mode->set_text(TTR("Agent mode for this project"));
 	root->add_child(agent_mode);
+
+	checkpoint_button = memnew(Button);
+	checkpoint_button->set_text(TTR("Create checkpoint"));
+	checkpoint_button->connect(SceneStringName(pressed), callable_mp(this, &AIAssistantDock::_checkpoint_pressed));
+	root->add_child(checkpoint_button);
 
 	include_scene = memnew(CheckBox);
 	include_scene->set_text(TTR("Include current scene"));
