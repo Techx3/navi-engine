@@ -34,6 +34,7 @@
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/json.h"
+#include "core/templates/hash_set.h"
 #include "core/variant/dictionary.h"
 #include "editor/file_system/editor_file_system.h"
 
@@ -177,6 +178,30 @@ Array AIActionManager::extract_actions_from_response(const String &p_response) {
 	}
 
 	return Array();
+}
+
+Vector<String> AIActionManager::collect_action_paths(const Array &p_actions) {
+	Vector<String> paths;
+	HashSet<String> seen;
+
+	for (int i = 0; i < p_actions.size(); i++) {
+		if (Variant(p_actions[i]).get_type() != Variant::DICTIONARY) {
+			continue;
+		}
+
+		const Dictionary action = p_actions[i];
+		if (!action.has("path")) {
+			continue;
+		}
+
+		const String path = String(action["path"]).strip_edges().simplify_path();
+		if (!path.is_empty() && !seen.has(path)) {
+			seen.insert(path);
+			paths.push_back(path);
+		}
+	}
+
+	return paths;
 }
 
 String AIActionManager::describe_actions(const Array &p_actions) {

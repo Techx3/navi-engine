@@ -32,6 +32,7 @@
 
 #include "core/error/error_list.h"
 #include "core/string/ustring.h"
+#include "core/templates/vector.h"
 #include "core/variant/array.h"
 
 class AIActionManager {
@@ -41,6 +42,7 @@ class AIActionManager {
 
 public:
 	static Array extract_actions_from_response(const String &p_response);
+	static Vector<String> collect_action_paths(const Array &p_actions);
 	static String describe_actions(const Array &p_actions);
 	static Error apply_actions(const Array &p_actions, String *r_message = nullptr);
 };

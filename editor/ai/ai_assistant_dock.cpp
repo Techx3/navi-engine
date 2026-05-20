@@ -99,14 +99,15 @@ void AIAssistantDock::_save_provider_settings() {
 }
 
 void AIAssistantDock::_checkpoint_pressed() {
-	String commit_hash;
+	const Vector<String> paths = AIActionManager::collect_action_paths(pending_actions);
+	String snapshot_id;
 	String message;
-	const Error err = AIProjectCheckpointManager::create_checkpoint(TTR("Manual AI checkpoint"), &commit_hash, &message);
+	const Error err = AIProjectCheckpointManager::create_checkpoint(TTR("Manual AI checkpoint"), paths, &snapshot_id, &message);
 
 	conversation->append_text("[b]NAVI[/b]\n");
 	if (err == OK) {
-		if (!commit_hash.is_empty()) {
-			conversation->append_text(vformat(TTR("Checkpoint ready: %s"), commit_hash).xml_escape() + "\n\n");
+		if (!snapshot_id.is_empty()) {
+			conversation->append_text(vformat(TTR("Project element checkpoint ready: %s"), snapshot_id).xml_escape() + "\n\n");
 		} else {
 			conversation->append_text(message.xml_escape() + "\n\n");
 		}
@@ -131,9 +132,10 @@ void AIAssistantDock::_apply_actions_pressed() {
 		return;
 	}
 
-	String checkpoint_hash;
+	const Vector<String> paths = AIActionManager::collect_action_paths(pending_actions);
+	String snapshot_id;
 	String checkpoint_message;
-	const Error checkpoint_err = AIProjectCheckpointManager::create_checkpoint(TTR("Before applying NAVI actions"), &checkpoint_hash, &checkpoint_message);
+	const Error checkpoint_err = AIProjectCheckpointManager::create_checkpoint(TTR("Before applying NAVI actions"), paths, &snapshot_id, &checkpoint_message);
 	if (checkpoint_err != OK) {
 		_ai_request_failed(checkpoint_message);
 		return;
@@ -152,8 +154,8 @@ void AIAssistantDock::_apply_actions_pressed() {
 	apply_actions_button->hide();
 
 	String result_message = apply_message;
-	if (!checkpoint_hash.is_empty()) {
-		result_message += " " + vformat(TTR("Checkpoint: %s"), checkpoint_hash);
+	if (!snapshot_id.is_empty()) {
+		result_message += " " + vformat(TTR("Checkpoint: %s"), snapshot_id);
 	}
 	conversation->append_text(result_message.xml_escape() + "\n\n");
 }

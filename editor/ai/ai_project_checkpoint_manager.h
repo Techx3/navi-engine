@@ -32,16 +32,14 @@
 
 #include "core/error/error_list.h"
 #include "core/string/ustring.h"
-#include "core/templates/list.h"
+#include "core/templates/vector.h"
 
 class AIProjectCheckpointManager {
 	static String _get_project_path();
-	static Error _run_git(const List<String> &p_arguments, String *r_output = nullptr, int *r_exitcode = nullptr);
-	static Error _ensure_git_identity();
-	static Error _ensure_gitignore();
+	static Error _ensure_checkpoint_store();
+	static String _make_snapshot_id();
+	static String _get_snapshot_file_path(const String &p_snapshot_id, const String &p_resource_path);
 
 public:
-	static bool is_project_repository_available();
-	static Error ensure_project_repository(String *r_message = nullptr);
-	static Error create_checkpoint(const String &p_reason, String *r_commit_hash = nullptr, String *r_message = nullptr);
+	static Error create_checkpoint(const String &p_reason, const Vector<String> &p_resource_paths, String *r_snapshot_id = nullptr, String *r_message = nullptr);
 };

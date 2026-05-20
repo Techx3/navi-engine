@@ -33,7 +33,10 @@
 #include "core/config/project_settings.h"
 #include "core/io/dir_access.h"
 #include "core/io/file_access.h"
-#include "core/os/os.h"
+#include "core/io/json.h"
+#include "core/os/time.h"
+#include "core/variant/array.h"
+#include "core/variant/dictionary.h"
 
 String AIProjectCheckpointManager::_get_project_path() {
 	ProjectSettings *project_settings = ProjectSettings::get_singleton();
@@ -43,200 +46,122 @@ String AIProjectCheckpointManager::_get_project_path() {
 	return project_settings->get_resource_path();
 }
 
-Error AIProjectCheckpointManager::_run_git(const List<String> &p_arguments, String *r_output, int *r_exitcode) {
+Error AIProjectCheckpointManager::_ensure_checkpoint_store() {
 	const String project_path = _get_project_path();
-	ERR_FAIL_COND_V_MSG(project_path.is_empty(), ERR_UNCONFIGURED, "NAVI AI checkpoints require an open project.");
+	ERR_FAIL_COND_V_MSG(project_path.is_empty(), ERR_UNCONFIGURED, "NAVI checkpoints require an open project.");
 
-	List<String> arguments;
-	arguments.push_back("-C");
-	arguments.push_back(project_path);
+	const String navi_dir = project_path.path_join(".navi");
+	const Error navi_dir_err = DirAccess::make_dir_recursive_absolute(navi_dir);
+	ERR_FAIL_COND_V(navi_dir_err != OK, navi_dir_err);
 
-	for (const String &argument : p_arguments) {
-		arguments.push_back(argument);
+	const String gdignore_path = navi_dir.path_join(".gdignore");
+	if (!FileAccess::exists(gdignore_path)) {
+		Ref<FileAccess> gdignore = FileAccess::open(gdignore_path, FileAccess::WRITE);
+		ERR_FAIL_COND_V(gdignore.is_null(), ERR_CANT_CREATE);
+		gdignore->store_line("");
 	}
 
-	String output;
-	int exitcode = 0;
-	const Error err = OS::get_singleton()->execute("git", arguments, &output, &exitcode, true);
-	if (r_output) {
-		*r_output = output.strip_edges();
-	}
-	if (r_exitcode) {
-		*r_exitcode = exitcode;
-	}
-
-	if (err != OK) {
-		return err;
-	}
-
-	return exitcode == 0 ? OK : FAILED;
-}
-
-Error AIProjectCheckpointManager::_ensure_git_identity() {
-	List<String> args;
-	String output;
-	int exitcode = 0;
-
-	args.push_back("config");
-	args.push_back("user.name");
-	if (_run_git(args, &output, &exitcode) != OK || output.is_empty()) {
-		args.clear();
-		args.push_back("config");
-		args.push_back("user.name");
-		args.push_back("NAVI AI");
-		ERR_FAIL_COND_V(_run_git(args) != OK, FAILED);
-	}
-
-	args.clear();
-	args.push_back("config");
-	args.push_back("user.email");
-	output.clear();
-	exitcode = 0;
-	if (_run_git(args, &output, &exitcode) != OK || output.is_empty()) {
-		args.clear();
-		args.push_back("config");
-		args.push_back("user.email");
-		args.push_back("navi-ai@local.invalid");
-		ERR_FAIL_COND_V(_run_git(args) != OK, FAILED);
-	}
+	const String checkpoint_dir = navi_dir.path_join("checkpoints");
+	const Error checkpoint_dir_err = DirAccess::make_dir_recursive_absolute(checkpoint_dir);
+	ERR_FAIL_COND_V(checkpoint_dir_err != OK, checkpoint_dir_err);
 
 	return OK;
 }
 
-Error AIProjectCheckpointManager::_ensure_gitignore() {
+String AIProjectCheckpointManager::_make_snapshot_id() {
+	String timestamp = Time::get_singleton()->get_datetime_string_from_system(false, false).remove_chars("-T:");
+	timestamp += "_" + itos(Time::get_singleton()->get_ticks_usec());
+	return timestamp;
+}
+
+String AIProjectCheckpointManager::_get_snapshot_file_path(const String &p_snapshot_id, const String &p_resource_path) {
 	const String project_path = _get_project_path();
-	ERR_FAIL_COND_V(project_path.is_empty(), ERR_UNCONFIGURED);
-
-	const String gitignore_path = project_path.path_join(".gitignore");
-	if (FileAccess::exists(gitignore_path)) {
-		return OK;
-	}
-
-	Ref<FileAccess> gitignore = FileAccess::open(gitignore_path, FileAccess::WRITE);
-	ERR_FAIL_COND_V(gitignore.is_null(), ERR_CANT_CREATE);
-
-	gitignore->store_line("# NAVI Engine project checkpoints");
-	gitignore->store_line(".godot/");
-	gitignore->store_line(".import/");
-	gitignore->store_line("*.tmp");
-	gitignore->store_line(".mono/temp/");
-	return OK;
+	const String relative_path = p_resource_path.simplify_path().trim_prefix("res://");
+	return project_path.path_join(".navi/checkpoints").path_join(p_snapshot_id).path_join("files").path_join(relative_path);
 }
 
-bool AIProjectCheckpointManager::is_project_repository_available() {
-	List<String> args;
-	args.push_back("rev-parse");
-	args.push_back("--is-inside-work-tree");
-
-	String output;
-	return _run_git(args, &output) == OK && output == "true";
-}
-
-Error AIProjectCheckpointManager::ensure_project_repository(String *r_message) {
-	if (is_project_repository_available()) {
+Error AIProjectCheckpointManager::create_checkpoint(const String &p_reason, const Vector<String> &p_resource_paths, String *r_snapshot_id, String *r_message) {
+	const Error store_err = _ensure_checkpoint_store();
+	if (store_err != OK) {
 		if (r_message) {
-			*r_message = "Project Git repository is ready.";
+			*r_message = "NAVI could not create the project checkpoint store.";
 		}
-		return OK;
+		return store_err;
 	}
 
-	List<String> args;
-	args.push_back("init");
+	ProjectSettings *project_settings = ProjectSettings::get_singleton();
+	ERR_FAIL_NULL_V(project_settings, ERR_UNCONFIGURED);
 
-	String output;
-	if (_run_git(args, &output) != OK) {
+	const String project_path = _get_project_path();
+	const String snapshot_id = _make_snapshot_id();
+	const String snapshot_dir = project_path.path_join(".navi/checkpoints").path_join(snapshot_id);
+	const Error snapshot_dir_err = DirAccess::make_dir_recursive_absolute(snapshot_dir.path_join("files"));
+	if (snapshot_dir_err != OK) {
 		if (r_message) {
-			*r_message = output.is_empty() ? "Git is not available or the project repository could not be initialized." : output;
+			*r_message = "NAVI could not create the checkpoint folder.";
 		}
-		return FAILED;
+		return snapshot_dir_err;
 	}
 
-	if (_ensure_gitignore() != OK || _ensure_git_identity() != OK) {
-		if (r_message) {
-			*r_message = "Project Git repository was initialized, but NAVI could not finish checkpoint configuration.";
+	Dictionary metadata;
+	metadata["id"] = snapshot_id;
+	metadata["reason"] = p_reason;
+	metadata["created_at"] = Time::get_singleton()->get_datetime_string_from_system(false, false);
+
+	Array files;
+	for (const String &resource_path : p_resource_paths) {
+		const String normalized_path = resource_path.strip_edges().simplify_path();
+		if (!normalized_path.begins_with("res://") || normalized_path.contains("..")) {
+			if (r_message) {
+				*r_message = "NAVI checkpoint skipped unsafe project path: " + resource_path;
+			}
+			return ERR_INVALID_PARAMETER;
 		}
-		return FAILED;
+
+		Dictionary file_metadata;
+		file_metadata["path"] = normalized_path;
+		file_metadata["existed"] = FileAccess::exists(normalized_path);
+
+		if (FileAccess::exists(normalized_path)) {
+			const String snapshot_file_path = _get_snapshot_file_path(snapshot_id, normalized_path);
+			const Error snapshot_base_err = DirAccess::make_dir_recursive_absolute(snapshot_file_path.get_base_dir());
+			if (snapshot_base_err != OK) {
+				if (r_message) {
+					*r_message = "NAVI could not create a checkpoint folder for " + normalized_path + ".";
+				}
+				return snapshot_base_err;
+			}
+
+			const Error copy_err = DirAccess::copy_absolute(project_settings->globalize_path(normalized_path), snapshot_file_path);
+			if (copy_err != OK) {
+				if (r_message) {
+					*r_message = "NAVI could not snapshot " + normalized_path + ".";
+				}
+				return copy_err;
+			}
+
+			file_metadata["snapshot_file"] = snapshot_file_path.replace(project_path.path_join(".navi/checkpoints").path_join(snapshot_id).path_join("files").path_join(""), "");
+		}
+
+		files.push_back(file_metadata);
 	}
 
+	metadata["files"] = files;
+
+	Ref<FileAccess> metadata_file = FileAccess::open(snapshot_dir.path_join("metadata.json"), FileAccess::WRITE);
+	if (metadata_file.is_null()) {
+		if (r_message) {
+			*r_message = "NAVI could not write checkpoint metadata.";
+		}
+		return ERR_CANT_CREATE;
+	}
+	metadata_file->store_string(JSON::stringify(metadata, "\t", false));
+
+	if (r_snapshot_id) {
+		*r_snapshot_id = snapshot_id;
+	}
 	if (r_message) {
-		*r_message = "Project Git repository initialized for NAVI checkpoints.";
-	}
-	return OK;
-}
-
-Error AIProjectCheckpointManager::create_checkpoint(const String &p_reason, String *r_commit_hash, String *r_message) {
-	String message;
-	if (ensure_project_repository(&message) != OK) {
-		if (r_message) {
-			*r_message = message;
-		}
-		return FAILED;
-	}
-
-	if (_ensure_git_identity() != OK) {
-		if (r_message) {
-			*r_message = "NAVI could not configure the local Git identity for checkpoints.";
-		}
-		return FAILED;
-	}
-
-	List<String> args;
-	args.push_back("status");
-	args.push_back("--porcelain");
-
-	String status_output;
-	if (_run_git(args, &status_output) != OK) {
-		if (r_message) {
-			*r_message = "NAVI could not read the project Git status.";
-		}
-		return FAILED;
-	}
-
-	if (status_output.is_empty()) {
-		args.clear();
-		args.push_back("rev-parse");
-		args.push_back("--short");
-		args.push_back("HEAD");
-		String head_hash;
-		if (_run_git(args, &head_hash) == OK && r_commit_hash) {
-			*r_commit_hash = head_hash;
-		}
-		if (r_message) {
-			*r_message = "No project file changes to checkpoint.";
-		}
-		return OK;
-	}
-
-	args.clear();
-	args.push_back("add");
-	args.push_back("-A");
-	ERR_FAIL_COND_V(_run_git(args) != OK, FAILED);
-
-	args.clear();
-	args.push_back("commit");
-	args.push_back("-m");
-	args.push_back("NAVI checkpoint: " + p_reason.strip_edges());
-
-	String commit_output;
-	if (_run_git(args, &commit_output) != OK) {
-		if (r_message) {
-			*r_message = commit_output.is_empty() ? "NAVI could not create the checkpoint commit." : commit_output;
-		}
-		return FAILED;
-	}
-
-	args.clear();
-	args.push_back("rev-parse");
-	args.push_back("--short");
-	args.push_back("HEAD");
-
-	String commit_hash;
-	if (_run_git(args, &commit_hash) == OK && r_commit_hash) {
-		*r_commit_hash = commit_hash;
-	}
-
-	if (r_message) {
-		*r_message = "Checkpoint created.";
+		*r_message = vformat("Checkpoint %s saved for %d project element(s).", snapshot_id, p_resource_paths.size());
 	}
 	return OK;
 }
