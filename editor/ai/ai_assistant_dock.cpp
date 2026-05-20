@@ -30,6 +30,8 @@
 
 #include "ai_assistant_dock.h"
 
+#include "ai_context_builder.h"
+
 #include "core/object/callable_mp.h"
 #include "editor/settings/editor_settings.h"
 #include "editor/themes/editor_scale.h"
@@ -97,10 +99,14 @@ void AIAssistantDock::_send_pressed() {
 
 	_save_provider_settings();
 
+	const Dictionary editor_context = AIContextBuilder::build_context(include_scene->is_pressed(), include_script->is_pressed());
+	const String context_summary = AIContextBuilder::summarize_context(editor_context);
+
 	conversation->append_text("[b]You[/b]\n");
 	conversation->append_text(prompt.xml_escape() + "\n\n");
+	conversation->append_text("[color=gray]" + context_summary.xml_escape() + "[/color]\n\n");
 	conversation->append_text("[b]NAVI[/b]\n");
-	conversation->append_text(TTR("The AI runtime is not connected yet. This dock is now wired into the editor and ready for provider clients, context collection, checkpoints, and action execution.") + String("\n\n"));
+	conversation->append_text(TTR("The AI runtime is not connected yet. The editor context is now captured and ready for provider clients, checkpoints, and action execution.") + String("\n\n"));
 	prompt_edit->clear();
 }
 
@@ -135,10 +141,10 @@ AIAssistantDock::AIAssistantDock() {
 	root->set_v_size_flags(SIZE_EXPAND_FILL);
 	add_child(root);
 
-	Label *title = memnew(Label);
-	title->set_text(TTR("NAVI AI"));
-	title->add_theme_font_size_override(SceneStringName(font_size), 18 * EDSCALE);
-	root->add_child(title);
+	Label *title_label = memnew(Label);
+	title_label->set_text(TTR("NAVI AI"));
+	title_label->add_theme_font_size_override(SceneStringName(font_size), 18 * EDSCALE);
+	root->add_child(title_label);
 
 	HBoxContainer *provider_row = memnew(HBoxContainer);
 	root->add_child(provider_row);
